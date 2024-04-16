@@ -10,7 +10,7 @@ Display::Display(Camera camera, cv::Size frameSize, double scale) :
 	for (int x = 0; x < 2; ++x) {
 		for (int y = 0; y < 2; ++y) {
 			for (int z = 0; z < 2; ++z) {
-				cubePoints[4*x+2*y+z] = cv::Point3d(x*10, y*10, -z*10);	
+				cubePoints[4*x+2*y+z] = cv::Point3d(x*100, y*100, -z*100);	
 			}
 		}
 	}
