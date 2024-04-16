@@ -15,14 +15,14 @@ PoseEstimator(camera), imageWidth(imageWidth) {
 
 	Mat descriptors;
 	vector<KeyPoint> keypoints;
-	detector = SIFT::create();
+	detector = ORB::create();
 	detector->detectAndCompute(image, noArray(), keypoints, descriptors);	
 
 	for (const auto& keypoint : keypoints) {
 		objectPoints.push_back(Point3f(keypoint.pt.x, keypoint.pt.y, 0.0));
 	}
 
-	matcher = DescriptorMatcher::create("FlannBased");
+	matcher = DescriptorMatcher::create("BruteForce-Hamming");
 	matcher->add(descriptors);
 }
 
@@ -38,19 +38,21 @@ Pose ImagePoseEstimator::estimatePose(const Mat& img) {
 
 	detector->detectAndCompute(image2, noArray(), keypoints2, descriptors2);
 
-	vector<vector<DMatch>> matches;
-	matcher->knnMatch(descriptors2, matches, 2);
+	vector<DMatch> matches;
+	matcher->match(descriptors2, matches);
+
+	std::sort(matches.begin(), matches.end());
+
+	const int numGoodMatches = matches.size() * 0.2;
+	matches.erase(matches.begin() + numGoodMatches, matches.end());
 
 	vector<Point2f> goodpoints2D;
 	vector<Point3f> goodpoints3D;
 
 	for (int i = 0; i < matches.size(); i++)
 	{
-		if (matches[i][0].distance < 0.4 * matches[i][1].distance)
-		{
-			goodpoints2D.push_back(keypoints2[matches[i][0].queryIdx].pt);
-			goodpoints3D.push_back(objectPoints[matches[i][0].trainIdx]);
-		}
+		goodpoints2D.push_back(keypoints2[matches[i].queryIdx].pt);
+		goodpoints3D.push_back(objectPoints[matches[i].trainIdx]);
 	}
 
 	std:cout << "good matches: " << goodpoints2D.size() << endl;
