@@ -12,7 +12,7 @@ bool is_numeric(std::string str) {
 }
 
 bool Config::parse(int argc, char* argv[]) {
-    if (argc != 6 && argc != 7) {
+    if (argc != 6 && argc != 7 && argc != 4) {
         std::cerr << "Invalid number of arguments" << std::endl;
 		return false;
 	} 
@@ -48,6 +48,13 @@ bool Config::parse(int argc, char* argv[]) {
 		}
 		imageFile = argv[4];
 		imageWidth = std::stod(argv[5]);
+    }
+    else if (methodStr == "FIDUCIAL") {
+        method = FIDUCIAL;
+        if (argc != 4) {
+            std::cerr << "Invalid number of arguments" << std::endl;
+            return false;
+        }
     }
     else {
 		std::cerr << "Invalid method " << methodStr << std::endl;

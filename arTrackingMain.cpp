@@ -4,6 +4,7 @@
 
 #include "Camera.h"
 #include "CheckerboardPoseEstimator.h"
+#include "FiducialPoseEstimator.h"
 #include "Config.h"
 #include "Display.h"
 #include "ImagePoseEstimator.h"
@@ -20,7 +21,7 @@ int main(int argc, char* argv[]) {
 
 	// Create a camera object and read in the calibration file
 	Camera camera;
-	
+
 	//Check calibrationFile exits
 	std::ifstream calibFile(cfg.calibrationFile);
 	if (!calibFile.is_open()) {
@@ -38,6 +39,9 @@ int main(int argc, char* argv[]) {
 	}
 	else if (cfg.method == IMAGE) {
 		poseEstimator = new ImagePoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
+	}
+	else if (cfg.method == FIDUCIAL) {
+		poseEstimator = new FiducialPoseEstimator(camera);
 	}
 	else {
 		std::cerr << "Invalid method" << std::endl;
@@ -68,13 +72,21 @@ int main(int argc, char* argv[]) {
 
 	// Main loop - read images, estimate pose, and update display.
 	Timer timer;
+	int trackedFrames = 0;
+	int totalFrames = 0;
 	while (cap.read(frame) && cv::waitKey(1) == noKey) {
 		timer.reset();
 		Pose pose = poseEstimator->estimatePose(frame);
 		double elapsed = timer.elapsed_ms();
-		std::cout << "Pose estimation took " << elapsed/1000.0 << "s" << std::endl;
+		std::cout << "Pose estimation took " << elapsed / 1000.0 << "s" << std::endl;
+		totalFrames += 1;
+		if (pose.valid) {
+			trackedFrames += 1;
+		}
 		display.show(frame, pose);
 	}
+
+	std::cout << "Tracked " << trackedFrames << " out of " << totalFrames << " frames" << trackedFrames/totalFrames*100 << "%" << std::endl;
 
 	return 0;
 }

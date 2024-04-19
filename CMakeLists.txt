@@ -26,6 +26,8 @@ add_executable( ARTracking
     PoseEstimator.h
     Timer.h
     arTrackingMain.cpp
+    FiducialPoseEstimator.cpp
+    FiducialPoseEstimator.h
 )
 
 target_link_libraries(ARTracking

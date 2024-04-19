@@ -4,7 +4,8 @@
 
 enum PoseEstimationMethod {
 	CHECKERBOARD,
-	IMAGE
+	IMAGE,
+	FIDUCIAL
 };
 
 enum CaptureSource {
