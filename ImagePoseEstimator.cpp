@@ -39,7 +39,7 @@ PoseEstimator(camera), imageWidth(imageWidth) {
 	// Detect keypoints and compute descriptors
 	cv::Mat descriptors;
 	vector<KeyPoint> keypoints;
-	detector = ORB::create();
+	detector = SIFT::create();
 	detector->detectAndCompute(image, noArray(), keypoints, descriptors);	
 
 	// Create the 3D points for the object
@@ -49,7 +49,7 @@ PoseEstimator(camera), imageWidth(imageWidth) {
 	}
 
 	// Initialize the matcher with the descriptors
-	matcher = DescriptorMatcher::create("BruteForce-Hamming");
+	matcher = DescriptorMatcher::create("FlannBased");
 	matcher->add(descriptors);
 }
 
@@ -64,21 +64,21 @@ Pose ImagePoseEstimator::estimatePose(const Mat& img) {
 	detector->detectAndCompute(img, noArray(), keypoints2, descriptors2);
 
 	// Match the descriptors
-	vector<DMatch> matches;
-	matcher->match(descriptors2, matches);
+	vector<std::vector<DMatch>> matches;
+	matcher->knnMatch(descriptors2, matches, 2);
 
-	// keep only the best 20% of matches
-	std::sort(matches.begin(), matches.end());
-	const int numGoodMatches = matches.size() * 0.2;
-	matches.erase(matches.begin() + numGoodMatches, matches.end());
-
+	// Filter the matches
 	// Get the 2D and 3D points for the good matches
+	double threshold = 0.7;
 	vector<Point2f> goodpoints2D;
 	vector<Point3f> goodpoints3D;
 	for (int i = 0; i < matches.size(); i++)
 	{
-		goodpoints2D.push_back(keypoints2[matches[i].queryIdx].pt);
-		goodpoints3D.push_back(objectPoints[matches[i].trainIdx]*imageWidth/image.cols);
+		if (matches[i][0].distance < threshold * matches[i][1].distance)
+		{
+			goodpoints2D.push_back(keypoints2[matches[i][0].queryIdx].pt);
+			goodpoints3D.push_back(objectPoints[matches[i][0].trainIdx] * imageWidth / image.cols);
+		}
 	}
 	std:cout << goodpoints2D.size() << "\t";
 
