@@ -5,9 +5,10 @@ using namespace cv;
 
 FiducialPoseEstimator::FiducialPoseEstimator(const Camera& camera):
 	PoseEstimator(camera) {
+	// Create a dictionary of markers
 	detector = cv::aruco::ArucoDetector(dictionary, detectorParams);
 
-	// create marker corner object points
+	// Create marker corner object points
 	for (int i = 0; i < markerIds.size(); i++) {
 		std::vector<cv::Point3f> markerObjPoints;
 		markerObjPoints.push_back(cv::Point3f(markerLocations[i].x, markerLocations[i].y, 0));
@@ -17,17 +18,24 @@ FiducialPoseEstimator::FiducialPoseEstimator(const Camera& camera):
 		objPoints.push_back(markerObjPoints);
 	}
 
-	board = cv::aruco::Board(objPoints , dictionary, markerIds);
+	// Create board object
+	board = cv::aruco::Board(objPoints, dictionary, markerIds);
 }
 
 Pose FiducialPoseEstimator::estimatePose(const Mat& img) {
+	cv::Mat gray;
+	cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+
+	//Init pose
 	Pose pose;
 	pose.valid = false;
 
+	// Detect markers
 	std::vector<int> foundMarkerIds;
 	std::vector<std::vector<cv::Point2f>> corners, rejectedCandidates;
 	detector.detectMarkers(img, corners, foundMarkerIds, rejectedCandidates);
 	detector.refineDetectedMarkers(img, board, corners, foundMarkerIds, rejectedCandidates);
+	std::cout << foundMarkerIds.size() << "\t";
 
 	// If at least one marker detected
 	if (foundMarkerIds.size() > 0) {
@@ -52,11 +60,11 @@ Pose FiducialPoseEstimator::estimatePose(const Mat& img) {
 		//cv::imshow("markers", img);
 		//cv::waitKey(0);
 		
-		
 		// Get object and image points for the solvePnP function
 		std::vector<cv::Point3f> outObjPoints;
 		std::vector<cv::Point2f> imgPoints;
 		board.matchImagePoints(corners, foundMarkerIds, outObjPoints, imgPoints);
+
 		// Find pose
 		cv::solvePnP(outObjPoints, imgPoints, camera.K, camera.d, pose.rvec, pose.tvec);
  		pose.valid = true;

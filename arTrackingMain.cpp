@@ -10,6 +10,7 @@
 #include "ImagePoseEstimator.h"
 #include "Timer.h"
 
+
 int main(int argc, char* argv[]) {
 
 	// Read in the configuration file
@@ -74,11 +75,12 @@ int main(int argc, char* argv[]) {
 	Timer timer;
 	int trackedFrames = 0;
 	int totalFrames = 0;
+	std::cout << "matches\ttime\terr" << std::endl;
 	while (cap.read(frame) && cv::waitKey(1) == noKey) {
 		timer.reset();
 		Pose pose = poseEstimator->estimatePose(frame);
 		double elapsed = timer.elapsed_ms();
-		std::cout << "Pose estimation took " << elapsed / 1000.0 << "s" << std::endl;
+		std::cout << elapsed / 1000.0 << "\t" << std::round(pose.err*10000.0)/10000.0 << "\t" << std::endl;
 		totalFrames += 1;
 		if (pose.valid) {
 			trackedFrames += 1;
@@ -86,7 +88,7 @@ int main(int argc, char* argv[]) {
 		display.show(frame, pose);
 	}
 
-	std::cout << "Tracked " << trackedFrames << " out of " << totalFrames << " frames" << trackedFrames/totalFrames*100 << "%" << std::endl;
+	std::cout << "Tracked " << trackedFrames << " out of " << totalFrames << " frames" << (double)trackedFrames / (double)totalFrames * 100 << "%" << std::endl;
 
 	return 0;
 }
