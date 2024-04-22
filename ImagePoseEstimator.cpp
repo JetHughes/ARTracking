@@ -80,7 +80,7 @@ Pose ImagePoseEstimator::estimatePose(const Mat& img) {
 			goodpoints3D.push_back(objectPoints[matches[i][0].trainIdx] * imageWidth / image.cols);
 		}
 	}
-	std:cout << goodpoints2D.size() << "\t";
+	std::cout << goodpoints2D.size() << "\t";
 
 	// Estimate the pose if we have at least 20 good matches
 	if (goodpoints2D.size() > 20)
