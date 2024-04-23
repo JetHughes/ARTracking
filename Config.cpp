@@ -56,6 +56,15 @@ bool Config::parse(int argc, char* argv[]) {
             return false;
         }
     }
+    else if (methodStr == "IMPROVED") {
+        method = IMPROVED;
+        if (argc != 6) {
+            std::cerr << "Invalid number of arguments" << std::endl;
+            return false;
+        }
+        imageFile = argv[4];
+        imageWidth = std::stod(argv[5]);
+    }
     else {
 		std::cerr << "Invalid method " << methodStr << std::endl;
 		return false;

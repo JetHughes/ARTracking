@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "CheckerboardPoseEstimator.h"
 #include "FiducialPoseEstimator.h"
+#include "ImprovedPoseEstimator.h"
 #include "Config.h"
 #include "Display.h"
 #include "ImagePoseEstimator.h"
@@ -14,7 +15,7 @@
 int main(int argc, char* argv[]) {
 
 	// Read in the configuration file
-	Config cfg;
+	Config cfg; 
 	if (!cfg.parse(argc, argv)) {
 		cfg.printUsage(std::cerr);
 		return -1;
@@ -43,6 +44,9 @@ int main(int argc, char* argv[]) {
 	}
 	else if (cfg.method == FIDUCIAL) {
 		poseEstimator = new FiducialPoseEstimator(camera);
+	} 
+	else if (cfg.method == IMPROVED) {
+		poseEstimator = new ImprovedPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
 	}
 	else {
 		std::cerr << "Invalid method" << std::endl;
@@ -75,7 +79,7 @@ int main(int argc, char* argv[]) {
 	Timer timer;
 	int trackedFrames = 0;
 	int totalFrames = 0;
-	std::cout << "matches\ttime\terr" << std::endl;
+	//std::cout << "matches\ttime\terr" << std::endl;
 	while (cap.read(frame) && cv::waitKey(1) == noKey) {
 		timer.reset();
 		Pose pose = poseEstimator->estimatePose(frame);
@@ -88,7 +92,7 @@ int main(int argc, char* argv[]) {
 		display.show(frame, pose);
 	}
 
-	std::cout << "Tracked " << trackedFrames << " out of " << totalFrames << " frames" << (double)trackedFrames / (double)totalFrames * 100 << "%" << std::endl;
+	//std::cout << "Tracked " << trackedFrames << " out of " << totalFrames << " frames" << (double)trackedFrames / (double)totalFrames * 100 << "%" << std::endl;
 
 	return 0;
 }

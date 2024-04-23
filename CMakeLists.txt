@@ -28,7 +28,7 @@ add_executable( ARTracking
     arTrackingMain.cpp
     FiducialPoseEstimator.cpp
     FiducialPoseEstimator.h
- "ImprovedPoseEstimator.h" "ImprovedPoseEstimator.cpp")
+ "NotImprovedPoseEstimator.h" "NotImprovedPoseEstimator.cpp" "ImprovedPoseEstimator.cpp" "ImprovedPoseEstimator.h")
 
 target_link_libraries(ARTracking
   ${OpenCV_LIBS}
