@@ -41,16 +41,16 @@ ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageF
 	detector = SIFT::create();
 	detectorH = SIFT::create();
 	detector->detectAndCompute(image, noArray(), keypoints, descriptors);
+	
+	// Initialize the matcher with the descriptors
+	matcher = DescriptorMatcher::create("FlannBased");
+	matcher->add(descriptors);
 
 	// Create the 3D points for the object
 	for (const auto& keypoint : keypoints)
 	{
 		objectPoints.push_back(Point3f(keypoint.pt.x, keypoint.pt.y, 0.0));
 	}
-
-	// Initialize the matcher with the descriptors
-	matcher = DescriptorMatcher::create("FlannBased");
-	matcher->add(descriptors);
 
 	// Init separate H (homography) matcher
 	matcherH = DescriptorMatcher::create("FlannBased");
@@ -64,15 +64,15 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 	Mat descriptors;
 	detector->detectAndCompute(img, noArray(), keypoints, descriptors);
 
-	// If we have a previous frame, track the object using relative pose estimation
-	if (!prevFrame.empty() && prevPose.valid)
-	{
-		pose = relativePoseEstimation(keypoints, descriptors);
-	}
-	else // Otherwise do absolute pose estimation
-	{
+	//// If we have a previous frame, track the object using relative pose estimation
+	//if (!prevFrame.empty() && prevPose.valid)
+	//{
+	//	pose = relativePoseEstimation(keypoints, descriptors);
+	//}
+	//else // Otherwise do absolute pose estimation
+	//{
 		pose = fullDetection(keypoints, descriptors);
-	}
+	//}
 	prevFrame = img;
 	prevPose = pose;
 	prevFrameKeypoints = keypoints;
@@ -110,7 +110,6 @@ Pose ImprovedPoseEstimator::relativePoseEstimation(vector<KeyPoint> keypoints, M
 		if (!E.empty())
 		{
 			int numIniliers = recoverPose(E, goodpoints1, goodpoints2, camera.K, R, t);
-			std::cout << numIniliers << "in\t";
 			if (numIniliers > 0) {
 
 				// Using the relative pose estimate the new absolute pose
@@ -122,6 +121,8 @@ Pose ImprovedPoseEstimator::relativePoseEstimation(vector<KeyPoint> keypoints, M
 				pose.tvec = prevPose.tvec + prevFrameR * t; // tac = tab + Rab * tbc
 
 				pose.valid = true;
+				//std::cout << "rel";
+				pose.err = -2;
 			}
 		}
 	}
@@ -158,13 +159,22 @@ Pose ImprovedPoseEstimator::fullDetection(vector<KeyPoint> keypoints, Mat descri
 		if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec))
 		{
 			double reprojectionError = computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
-			if (reprojectionError < 50)
+			if (reprojectionError < 30)
 			{
 				pose.valid = true;
+				//std::cout << "abs";
 				//pose.toString();
 			}
 			pose.err = reprojectionError;
 		}
+	}
+
+	if (!pose.valid && prevPose.valid)
+	{
+		// If we can't find the pose and we had a reasonable estimation in the previous frame, 
+		// try to track the object using the previous frame
+		pose = relativePoseEstimation(keypoints, descriptors);
+		std::cout << "r";
 	}
 
 	return pose;

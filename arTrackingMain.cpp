@@ -6,6 +6,7 @@
 #include "CheckerboardPoseEstimator.h"
 #include "FiducialPoseEstimator.h"
 #include "ImprovedPoseEstimator.h"
+#include "ORBPoseEstimator.h"
 #include "Config.h"
 #include "Display.h"
 #include "ImagePoseEstimator.h"
@@ -47,6 +48,9 @@ int main(int argc, char* argv[]) {
 	} 
 	else if (cfg.method == IMPROVED) {
 		poseEstimator = new ImprovedPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
+	}
+	else if (cfg.method == ORB) {
+		poseEstimator = new ORBPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
 	}
 	else {
 		std::cerr << "Invalid method" << std::endl;
