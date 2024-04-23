@@ -19,7 +19,7 @@ private:
 
 	cv::Mat image;
 	double imageWidth;
-	cv::Ptr<cv::FeatureDetector> detector, detectorH;
+	cv::Ptr<cv::SIFT> detector, detectorH;
 	cv::Ptr<cv::DescriptorMatcher> matcher, matcherH;
 	std::vector<cv::Point3f> objectPoints;
 	cv::Mat prevFrame;

@@ -102,24 +102,27 @@ Pose ImprovedPoseEstimator::relativePoseEstimation(vector<KeyPoint> keypoints, M
 		}
 	}
 
-	// Using the essential matrix estimate the relative pose of the new frame
-	cv::Mat E, R, t;
-	E = findEssentialMat(goodpoints1, goodpoints2, camera.K, RANSAC);
-	if (!E.empty())
+	if (goodpoints1.size() > 8)
 	{
-		int numIniliers = recoverPose(E, goodpoints1, goodpoints2, camera.K, R, t);
-		std::cout << numIniliers << "in\t";
-		if (numIniliers > 0) {
+		// Using the essential matrix estimate the relative pose of the new frame
+		cv::Mat E, R, t;
+		E = findEssentialMat(goodpoints1, goodpoints2, camera.K, RANSAC);
+		if (!E.empty())
+		{
+			int numIniliers = recoverPose(E, goodpoints1, goodpoints2, camera.K, R, t);
+			std::cout << numIniliers << "in\t";
+			if (numIniliers > 0) {
 
-			// Using the relative pose estimate the new absolute pose
-			// Pose ac is a combinatin of pose ab and pose bc
-			Mat prevFrameR;
-			Rodrigues(prevPose.rvec, prevFrameR);
+				// Using the relative pose estimate the new absolute pose
+				// Pose ac is a combinatin of pose ab and pose bc
+				Mat prevFrameR;
+				Rodrigues(prevPose.rvec, prevFrameR);
 
-			Rodrigues(prevFrameR * R, pose.rvec); // Rac = Rab * Rbc
-			pose.tvec = prevPose.tvec + prevFrameR * t; // tac = tab + Rab * tbc
+				Rodrigues(prevFrameR * R, pose.rvec); // Rac = Rab * Rbc
+				pose.tvec = prevPose.tvec + prevFrameR * t; // tac = tab + Rab * tbc
 
-			pose.valid = true;
+				pose.valid = true;
+			}
 		}
 	}
 
