@@ -44,7 +44,6 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 	// Detect keypoints and compute descriptors
 	vector<KeyPoint> keypoints;
 	Mat descriptors;
-	detector->detectAndCompute(img, noArray(), keypoints, descriptors);
 
 	// If we have a previous frame, track the object using relative pose estimation
 	if (!prevFrame.empty() && prevPose.valid)
@@ -54,6 +53,9 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 	}
 	else // Otherwise do absolute pose estimation
 	{
+		detector->detectAndCompute(img, noArray(), keypoints, descriptors);
+		prevFrameKeypoints = keypoints;
+		prevFrameDescriptors = descriptors;
 		pose = fullDetection(keypoints, descriptors);
 		if (pose.valid) {
 			cv::Mat grey;
@@ -63,8 +65,6 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 	}
 	prevFrame = img;
 	prevPose = pose;
-	prevFrameKeypoints = keypoints;
-	prevFrameDescriptors = descriptors;
 	return pose;
 }
 
@@ -76,7 +76,8 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 	cv::Mat prev_grey;
 	cvtColor(prevFrame, prev_grey, COLOR_BGR2GRAY);
 
-	// Create some random colors
+	// Stuff for drawing images
+	Mat mask = Mat::zeros(prevFrame.size(), prevFrame.type());
 	vector<Scalar> colors;
 	RNG rng;
 	for (int i = 0; i < 100; i++)
@@ -86,19 +87,19 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 		int b = rng.uniform(0, 256);
 		colors.push_back(Scalar(r, g, b));
 	}
-	for (uint i = 0; i < prevFrameImagePoints.size(); i++) {
-		circle(prev_grey, prevFrameImagePoints[i], 5, colors[i], -1);
-	}
-	cv::imshow("prev", prev_grey);
-	cv::imshow("frame", frame_gray);
-	cv::waitKey(0);
+	//for (uint i = 0; i < prevFrameImagePoints.size(); i++) {
+	//	circle(prev_grey, prevFrameImagePoints[i], 5, colors[i], -1);
+	//}
+	//cv::imshow("prev", prev_grey);
+	//cv::imshow("frame", frame_gray);
+	//cv::waitKey(0);
 
 	// calculate optical flow
 	vector<uchar> status;
 	vector<float> err;
 	vector<Point2f> imagePoints;
 	TermCriteria criteria = TermCriteria((TermCriteria::COUNT)+(TermCriteria::EPS), 10, 0.03);
-	calcOpticalFlowPyrLK(prevFrame, frame_gray, prevFrameImagePoints, imagePoints, status, err, Size(15, 15), 2, criteria);
+	calcOpticalFlowPyrLK(prev_grey, frame_gray, prevFrameImagePoints, imagePoints, status, err, Size(15, 15), 2, criteria);
 
 	vector<Point2f> good_new;
 	vector<Point2f> good_old;
@@ -108,8 +109,15 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 		if (status[i] == 1) {
 			good_new.push_back(imagePoints[i]);
 			good_old.push_back(prevFrameImagePoints[i]);
+			line(mask, imagePoints[i], prevFrameImagePoints[i], colors[i], 2);
+			circle(mask, imagePoints[i], 5, colors[i], -1);
 		}
 	}
+
+	Mat flowImg;
+	add(img, mask, flowImg);
+	imshow("flow", flowImg);
+
 
 	if (good_new.size() > 8)
 	{
@@ -125,7 +133,6 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 		pose = Util::solvePose(projectedRefImagePoints, refFrameObjectPoints, camera);
 	}
 
-	prevFrameImagePoints = good_new;
 	return pose;
 }
 
@@ -156,8 +163,8 @@ Pose ImprovedPoseEstimator::relativePoseEstimation(vector<KeyPoint> keypoints, M
 		Mat H = findHomography(goodpoints1, goodpoints2, RANSAC);
 		
 		// apply H to prevHomography matrix to get the new homography
-		Mat newHomography = prevHomography * H;
-		prevHomography = H;
+		Mat newHomography = H * prevHomography;
+		prevHomography = newHomography;
 
 		vector<Point2f> projectedRefImagePoints;
 		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, newHomography);
