@@ -1,11 +1,17 @@
 #include "ImprovedPoseEstimator.h"
 #include <opencv2/opencv.hpp>
 #include "Util.h"
+#include <iostream>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
+#include <opencv2/video.hpp>
 
 using namespace std;
 using namespace cv;
 
-ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageFile, double imageWidth) :
+ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageFile, double imageWidth, cv::Mat frame) :
 	PoseEstimator(camera), imageWidth(imageWidth) {
 
 	// Read the image
@@ -36,6 +42,8 @@ ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageF
 
 	// Init separate H (homography) matcher
 	matcherH = DescriptorMatcher::create("FlannBased");
+	mask = Mat::zeros(frame.size(), frame.type());
+
 }
 
 Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
@@ -60,10 +68,12 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 		if (pose.valid) {
 			cv::Mat grey;
 			cvtColor(img, grey, COLOR_BGR2GRAY);
-			goodFeaturesToTrack(grey, prevFrameImagePoints, 100, 0.3, 7, noArray(), 7, false, 0.04);
+			vector<Point2f> goodFeatures;
+			goodFeaturesToTrack(grey, goodFeatures, 100, 0.3, 7, noArray(), 7, false, 0.04);
+			prevFrameImagePoints = goodFeatures;
+			prevFrame = img;
 		}
 	}
-	prevFrame = img;
 	prevPose = pose;
 	return pose;
 }
@@ -77,7 +87,6 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 	cvtColor(prevFrame, prev_grey, COLOR_BGR2GRAY);
 
 	// Stuff for drawing images
-	Mat mask = Mat::zeros(prevFrame.size(), prevFrame.type());
 	vector<Scalar> colors;
 	RNG rng;
 	for (int i = 0; i < 100; i++)
@@ -87,12 +96,6 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 		int b = rng.uniform(0, 256);
 		colors.push_back(Scalar(r, g, b));
 	}
-	//for (uint i = 0; i < prevFrameImagePoints.size(); i++) {
-	//	circle(prev_grey, prevFrameImagePoints[i], 5, colors[i], -1);
-	//}
-	//cv::imshow("prev", prev_grey);
-	//cv::imshow("frame", frame_gray);
-	//cv::waitKey(0);
 
 	// calculate optical flow
 	vector<uchar> status;
@@ -110,22 +113,27 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 			good_new.push_back(imagePoints[i]);
 			good_old.push_back(prevFrameImagePoints[i]);
 			line(mask, imagePoints[i], prevFrameImagePoints[i], colors[i], 2);
-			circle(mask, imagePoints[i], 5, colors[i], -1);
+			circle(img, imagePoints[i], 5, colors[i], -1);
 		}
 	}
 
-	Mat flowImg;
+	cv::Mat flowImg;
 	add(img, mask, flowImg);
 	imshow("flow", flowImg);
 
+	prevFrameImagePoints = good_new;
+	prevFrame = img.clone();
 
-	if (good_new.size() > 8)
+	std::cout << good_new.size() << "\t";
+
+	// estimate pose using homography chaining
+	if (good_new.size() > 50) 
 	{
-		Mat H = findHomography(good_new, good_old, RANSAC);
+		Mat H = findHomography(good_old, good_new, RANSAC);
 
 		// apply H to prevHomography matrix to get the new homography
-		Mat newHomography = prevHomography * H;
-		prevHomography = H;
+		Mat newHomography = H * prevHomography;
+		prevHomography = newHomography;
 
 		vector<Point2f> projectedRefImagePoints;
 		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, newHomography);
@@ -204,7 +212,7 @@ Pose ImprovedPoseEstimator::fullDetection(vector<KeyPoint> keypoints, Mat descri
 		if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec))
 		{
 			double reprojectionError = Util::computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
-			if (reprojectionError < 30)
+			if (reprojectionError < 10)
 			{
 				pose.valid = true;
 				refFrameObjectPoints = goodpoints3D;

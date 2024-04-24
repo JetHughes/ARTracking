@@ -35,28 +35,6 @@ int main(int argc, char* argv[]) {
 	calibFile >> camera;
 	calibFile.close();
 
-	// Create a pose estimator object
-	PoseEstimator* poseEstimator = 0;
-	if (cfg.method == CHECKERBOARD) {
-		poseEstimator = new CheckerboardPoseEstimator(camera, cv::Size(cfg.gridWidth, cfg.gridHeight), cfg.gridSize);
-	}
-	else if (cfg.method == IMAGE) {
-		poseEstimator = new ImagePoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
-	}
-	else if (cfg.method == FIDUCIAL) {
-		poseEstimator = new FiducialPoseEstimator(camera);
-	} 
-	else if (cfg.method == IMPROVED) {
-		poseEstimator = new ImprovedPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
-	}
-	else if (cfg.method == ORB) {
-		poseEstimator = new ORBPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
-	}
-	else {
-		std::cerr << "Invalid method" << std::endl;
-		return -1;
-	}
-
 	// Open the video source
 	cv::VideoCapture cap;
 	if (cfg.captureSource == CAMERA) {
@@ -78,6 +56,28 @@ int main(int argc, char* argv[]) {
 	}
 	Display display(camera, frame.size(), 3);
 
+
+	// Create a pose estimator object
+	PoseEstimator* poseEstimator = 0;
+	if (cfg.method == CHECKERBOARD) {
+		poseEstimator = new CheckerboardPoseEstimator(camera, cv::Size(cfg.gridWidth, cfg.gridHeight), cfg.gridSize);
+	}
+	else if (cfg.method == IMAGE) {
+		poseEstimator = new ImagePoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
+	}
+	else if (cfg.method == FIDUCIAL) {
+		poseEstimator = new FiducialPoseEstimator(camera);
+	} 
+	else if (cfg.method == IMPROVED) {
+		poseEstimator = new ImprovedPoseEstimator(camera, cfg.imageFile, cfg.imageWidth, frame);
+	}
+	else if (cfg.method == ORB) {
+		poseEstimator = new ORBPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
+	}
+	else {
+		std::cerr << "Invalid method" << std::endl;
+		return -1;
+	}
 
 	// Main loop - read images, estimate pose, and update display.
 	Timer timer;

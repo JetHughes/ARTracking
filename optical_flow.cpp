@@ -64,7 +64,7 @@ int main(int argc, char** argv)
             break;
         cvtColor(frame, frame_gray, COLOR_BGR2GRAY);
 
-        // calculate optical flow
+        //// calculate optical flow
         vector<uchar> status;
         vector<float> err;
         TermCriteria criteria = TermCriteria((TermCriteria::COUNT)+(TermCriteria::EPS), 10, 0.03);

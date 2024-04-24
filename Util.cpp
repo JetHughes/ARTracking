@@ -10,7 +10,7 @@ Pose Util::solvePose(vector<Point2f> goodpoints2D, vector<Point3f> goodpoints3D,
 
     if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec)) {
         double reprojectionError = computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
-        if (reprojectionError < 100) {
+        if (reprojectionError < 10) {
             pose.valid = true;
         }
         pose.err = reprojectionError;

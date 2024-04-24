@@ -5,7 +5,7 @@
 class ImprovedPoseEstimator : public PoseEstimator {
 
 public:
-	ImprovedPoseEstimator(const Camera& camera, std::string imageFile, double imageWidth);
+	ImprovedPoseEstimator(const Camera& camera, std::string imageFile, double imageWidth, cv::Mat frame);
 	virtual ~ImprovedPoseEstimator() = default;
 	ImprovedPoseEstimator(const ImprovedPoseEstimator& other) = default;
 	ImprovedPoseEstimator& operator=(const ImprovedPoseEstimator& other) = default;
@@ -29,5 +29,6 @@ private:
 	std::vector<cv::Point2f> refFrameImagePoints;
 	std::vector<cv::KeyPoint> prevFrameKeypoints;
 	std::vector<cv::Point2f> prevFrameImagePoints;
+	cv::Mat mask;
 	Pose prevPose;
 };
