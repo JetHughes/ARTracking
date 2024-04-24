@@ -1,27 +1,9 @@
 #include "ImprovedPoseEstimator.h"
 #include <opencv2/opencv.hpp>
+#include "Util.h"
 
 using namespace std;
 using namespace cv;
-
-// Compute the reprojection error
-// https://chat.openai.com/share/21126c54-3fa6-4017-a63e-3f0ea34728a7
-double ImprovedPoseEstimator::computeReprojectionError(const std::vector<cv::Point3f>& objectPoints, const std::vector<cv::Point2f>& imagePoints, const cv::Mat& rvec, const cv::Mat& tvec, const cv::Mat& cameraMatrix, const cv::InputArray distortionCoeffs) {
-	std::vector<cv::Point2f> projectedPoints;
-	projectPoints(objectPoints, rvec, tvec, cameraMatrix, distortionCoeffs, projectedPoints);
-
-	double totalError = 0.0;
-	for (size_t i = 0; i < imagePoints.size(); ++i)
-	{
-		double dx = projectedPoints[i].x - imagePoints[i].x;
-		double dy = projectedPoints[i].y - imagePoints[i].y;
-		double error = sqrt(dx * dx + dy * dy);
-		totalError += error;
-	}
-
-	double meanError = totalError / imagePoints.size();
-	return meanError;
-}
 
 ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageFile, double imageWidth) :
 	PoseEstimator(camera), imageWidth(imageWidth) {
@@ -64,19 +46,86 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 	Mat descriptors;
 	detector->detectAndCompute(img, noArray(), keypoints, descriptors);
 
-	//// If we have a previous frame, track the object using relative pose estimation
-	//if (!prevFrame.empty() && prevPose.valid)
-	//{
-	//	pose = relativePoseEstimation(keypoints, descriptors);
-	//}
-	//else // Otherwise do absolute pose estimation
-	//{
+	// If we have a previous frame, track the object using relative pose estimation
+	if (!prevFrame.empty() && prevPose.valid)
+	{
+		//pose = relativePoseEstimation(keypoints, descriptors);
+		pose = opticalFlowTracking(img);
+	}
+	else // Otherwise do absolute pose estimation
+	{
 		pose = fullDetection(keypoints, descriptors);
-	//}
+		if (pose.valid) {
+			cv::Mat grey;
+			cvtColor(img, grey, COLOR_BGR2GRAY);
+			goodFeaturesToTrack(grey, prevFrameImagePoints, 100, 0.3, 7, noArray(), 7, false, 0.04);
+		}
+	}
 	prevFrame = img;
 	prevPose = pose;
 	prevFrameKeypoints = keypoints;
 	prevFrameDescriptors = descriptors;
+	return pose;
+}
+
+Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
+	Pose pose;
+	cv::Mat frame_gray;
+	cvtColor(img, frame_gray, COLOR_BGR2GRAY);
+
+	cv::Mat prev_grey;
+	cvtColor(prevFrame, prev_grey, COLOR_BGR2GRAY);
+
+	// Create some random colors
+	vector<Scalar> colors;
+	RNG rng;
+	for (int i = 0; i < 100; i++)
+	{
+		int r = rng.uniform(0, 256);
+		int g = rng.uniform(0, 256);
+		int b = rng.uniform(0, 256);
+		colors.push_back(Scalar(r, g, b));
+	}
+	for (uint i = 0; i < prevFrameImagePoints.size(); i++) {
+		circle(prev_grey, prevFrameImagePoints[i], 5, colors[i], -1);
+	}
+	cv::imshow("prev", prev_grey);
+	cv::imshow("frame", frame_gray);
+	cv::waitKey(0);
+
+	// calculate optical flow
+	vector<uchar> status;
+	vector<float> err;
+	vector<Point2f> imagePoints;
+	TermCriteria criteria = TermCriteria((TermCriteria::COUNT)+(TermCriteria::EPS), 10, 0.03);
+	calcOpticalFlowPyrLK(prevFrame, frame_gray, prevFrameImagePoints, imagePoints, status, err, Size(15, 15), 2, criteria);
+
+	vector<Point2f> good_new;
+	vector<Point2f> good_old;
+	for (uint i = 0; i < prevFrameImagePoints.size(); i++)
+	{
+		// Select good points
+		if (status[i] == 1) {
+			good_new.push_back(imagePoints[i]);
+			good_old.push_back(prevFrameImagePoints[i]);
+		}
+	}
+
+	if (good_new.size() > 8)
+	{
+		Mat H = findHomography(good_new, good_old, RANSAC);
+
+		// apply H to prevHomography matrix to get the new homography
+		Mat newHomography = prevHomography * H;
+		prevHomography = H;
+
+		vector<Point2f> projectedRefImagePoints;
+		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, newHomography);
+
+		pose = Util::solvePose(projectedRefImagePoints, refFrameObjectPoints, camera);
+	}
+
+	prevFrameImagePoints = good_new;
 	return pose;
 }
 
@@ -104,27 +153,16 @@ Pose ImprovedPoseEstimator::relativePoseEstimation(vector<KeyPoint> keypoints, M
 
 	if (goodpoints1.size() > 8)
 	{
-		// Using the essential matrix estimate the relative pose of the new frame
-		cv::Mat E, R, t;
-		E = findEssentialMat(goodpoints1, goodpoints2, camera.K, RANSAC);
-		if (!E.empty())
-		{
-			int numIniliers = recoverPose(E, goodpoints1, goodpoints2, camera.K, R, t);
-			if (numIniliers > 0) {
+		Mat H = findHomography(goodpoints1, goodpoints2, RANSAC);
+		
+		// apply H to prevHomography matrix to get the new homography
+		Mat newHomography = prevHomography * H;
+		prevHomography = H;
 
-				// Using the relative pose estimate the new absolute pose
-				// Pose ac is a combinatin of pose ab and pose bc
-				Mat prevFrameR;
-				Rodrigues(prevPose.rvec, prevFrameR);
+		vector<Point2f> projectedRefImagePoints;
+		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, newHomography);
 
-				Rodrigues(prevFrameR * R, pose.rvec); // Rac = Rab * Rbc
-				pose.tvec = prevPose.tvec + prevFrameR * t; // tac = tab + Rab * tbc
-
-				pose.valid = true;
-				//std::cout << "rel";
-				pose.err = -2;
-			}
-		}
+		pose = Util::solvePose(projectedRefImagePoints, refFrameObjectPoints, camera);
 	}
 
 	return pose;
@@ -158,10 +196,13 @@ Pose ImprovedPoseEstimator::fullDetection(vector<KeyPoint> keypoints, Mat descri
 	if (goodpoints2D.size() > 20) {
 		if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec))
 		{
-			double reprojectionError = computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
+			double reprojectionError = Util::computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
 			if (reprojectionError < 30)
 			{
 				pose.valid = true;
+				refFrameObjectPoints = goodpoints3D;
+				refFrameImagePoints = goodpoints2D;
+				prevHomography = Mat::eye(3, 3, CV_64F);
 				//std::cout << "abs";
 				//pose.toString();
 			}
@@ -169,13 +210,13 @@ Pose ImprovedPoseEstimator::fullDetection(vector<KeyPoint> keypoints, Mat descri
 		}
 	}
 
-	if (!pose.valid && prevPose.valid)
-	{
-		// If we can't find the pose and we had a reasonable estimation in the previous frame, 
-		// try to track the object using the previous frame
-		pose = relativePoseEstimation(keypoints, descriptors);
-		std::cout << "r";
-	}
+	//if (!pose.valid && prevPose.valid)
+	//{
+	//	// If we can't find the pose and we had a reasonable estimation in the previous frame, 
+	//	// try to track the object using the previous frame
+	//	pose = relativePoseEstimation(keypoints, descriptors);
+	//	std::cout << "r";
+	//}
 
 	return pose;
 }

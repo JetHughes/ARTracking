@@ -1,27 +1,9 @@
 #include "ORBPoseEstimator.h"
 #include <opencv2/opencv.hpp>
+#include "Util.h"
 
 using namespace std;
 using namespace cv;
-
-// Compute the reprojection error
-// https://chat.openai.com/share/21126c54-3fa6-4017-a63e-3f0ea34728a7
-double ORBPoseEstimator::computeReprojectionError(const std::vector<cv::Point3f>& objectPoints, const std::vector<cv::Point2f>& imagePoints, const cv::Mat& rvec, const cv::Mat& tvec, const cv::Mat& cameraMatrix, const cv::InputArray distortionCoeffs) {
-	std::vector<cv::Point2f> projectedPoints;
-	projectPoints(objectPoints, rvec, tvec, cameraMatrix, distortionCoeffs, projectedPoints);
-
-	double totalError = 0.0;
-	for (size_t i = 0; i < imagePoints.size(); ++i)
-	{
-		double dx = projectedPoints[i].x - imagePoints[i].x;
-		double dy = projectedPoints[i].y - imagePoints[i].y;
-		double error = sqrt(dx * dx + dy * dy);
-		totalError += error;
-	}
-
-	double meanError = totalError / imagePoints.size();
-	return meanError;
-}
 
 ORBPoseEstimator::ORBPoseEstimator(const Camera& camera, string imageFile, double imageWidth) :
 	PoseEstimator(camera), imageWidth(imageWidth) {
@@ -33,6 +15,8 @@ ORBPoseEstimator::ORBPoseEstimator(const Camera& camera, string imageFile, doubl
 		throw runtime_error("Image not found");
 		exit(1);
 	}
+	cv::Mat grey;
+	cv::cvtColor(image, grey, cv::COLOR_BGR2GRAY);
 	//cv::imshow("Image", image);
 	//cv::waitKey(0);
 
@@ -58,10 +42,13 @@ Pose ORBPoseEstimator::estimatePose(const Mat& img) {
 	Pose pose;
 	pose.valid = false;
 
+	cv::Mat grey;
+	cv::cvtColor(img, grey, cv::COLOR_BGR2GRAY);
+
 	// Detect keypoints and compute descriptors
 	vector<KeyPoint>keypoints2;
 	Mat descriptors2;
-	detector->detectAndCompute(img, noArray(), keypoints2, descriptors2);
+	detector->detectAndCompute(grey, noArray(), keypoints2, descriptors2);
 
 	// Match the descriptors
 	vector<DMatch> matches;
@@ -72,7 +59,7 @@ Pose ORBPoseEstimator::estimatePose(const Mat& img) {
 	vector<Point2f> goodpoints2D;
 	vector<Point3f> goodpoints3D;
 	std::sort(matches.begin(), matches.end());
-	const int numGoodMatches = matches.size() * 0.2;
+	const int numGoodMatches = matches.size() * 0.1;
 	matches.erase(matches.begin() + numGoodMatches, matches.end());
 	for (int i = 0; i < matches.size(); i++)
 	{
@@ -84,16 +71,39 @@ Pose ORBPoseEstimator::estimatePose(const Mat& img) {
 	// Estimate the pose if we have at least 20 good matches
 	if (goodpoints2D.size() > 20)
 	{
-		if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec))
-		{
-			double reprojectionError = computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
-			if (reprojectionError < 100)
-			{
-				pose.valid = true;
-				//pose.toString();
-			}
-			pose.err = reprojectionError;
-		}
+		pose = Util::solvePose(goodpoints2D, goodpoints3D, camera);
+		//if (pose.valid && pose.err < 50) {
+		//	pose = refinePose(goodpoints2D, goodpoints3D);
+		//}
 	}
 	return pose;
 }
+
+Pose ORBPoseEstimator::refinePose(vector<Point2f> goodpoints2D, vector<Point3f> goodpoints3D) {
+	Pose pose;
+
+	for (size_t i = 0; i < 5; i++)
+	{
+		// randomly select 20 point matches
+		vector<Point2f> randpoints2d;
+		vector<Point3f> randpoints3d;
+		int idx = rand() % (goodpoints2D.size() - 20);
+		for (int i = idx; i < idx+20; i++)
+		{
+			randpoints2d.push_back(goodpoints2D[i]);
+			randpoints3d.push_back(goodpoints3D[i]);
+		}
+
+		// compute pose using 8 point matches
+		Pose tempPose = Util::solvePose(randpoints2d, randpoints3d, camera);
+
+		// update the best pose
+		if (tempPose.err < pose.err && pose.valid)
+		{
+			pose = tempPose;
+		}
+	}
+
+	return pose;
+}
+

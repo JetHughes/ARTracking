@@ -28,7 +28,10 @@ add_executable( ARTracking
     arTrackingMain.cpp
     FiducialPoseEstimator.cpp
     FiducialPoseEstimator.h
-   "ImprovedPoseEstimator.cpp" "ImprovedPoseEstimator.h" "ORBPoseEstimator.cpp" "ORBPoseEstimator.h" "optical_flow.cpp")
+   ImprovedPoseEstimator.cpp
+   ImprovedPoseEstimator.h
+   ORBPoseEstimator.cpp
+   ORBPoseEstimator.h "Util.cpp" "Util.h")
 
 
 target_link_libraries(ARTracking
