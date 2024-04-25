@@ -31,6 +31,8 @@ struct Config {
 	int gridWidth;
 	int gridHeight;
 	double gridSize;
+
+	double markerSize;
 	
 	std::string imageFile;
 	double imageWidth;

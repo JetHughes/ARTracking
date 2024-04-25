@@ -17,5 +17,5 @@ private:
 	cv::Ptr<cv::DescriptorMatcher> matcher;
 	std::vector<cv::Point3f> objectPoints;
 
-	Pose ORBPoseEstimator::refinePose(std::vector<cv::Point2f> goodpoints2D, std::vector<cv::Point3f> goodpoints3D);
+	Pose refinePose(Pose& pose, std::vector<cv::Point2f>& goodpoints2D, std::vector<cv::Point3f>& goodpoints3D);
 };

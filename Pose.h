@@ -13,12 +13,12 @@ public:
 	void toString() {
 		//round to 4 decimal places
 		std::cout << "Pose: " << std::setprecision(4) <<
-		std::round(rvec.at<double>(0) * 10000) / 10000 << " " <<
-		std::round(rvec.at<double>(1) * 10000) / 10000 << " " <<
-		std::round(rvec.at<double>(2) * 10000) / 10000 << " " <<
-		std::round(tvec.at<double>(0) * 10000) / 10000 << " " <<
-		std::round(tvec.at<double>(1) * 10000) / 10000 << " " <<
-		std::round(tvec.at<double>(2) * 10000) / 10000;
+		std::round(rvec.at<float>(0) * 10000) / 10000 << " " <<
+		std::round(rvec.at<float>(1) * 10000) / 10000 << " " <<
+		std::round(rvec.at<float>(2) * 10000) / 10000 << " " <<
+		std::round(tvec.at<float>(0) * 10000) / 10000 << " " <<
+		std::round(tvec.at<float>(1) * 10000) / 10000 << " " <<
+		std::round(tvec.at<float>(2) * 10000) / 10000;
 	}
 
 	cv::Mat rvec;

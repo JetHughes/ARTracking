@@ -12,7 +12,7 @@ bool is_numeric(std::string str) {
 }
 
 bool Config::parse(int argc, char* argv[]) {
-    if (argc != 6 && argc != 7 && argc != 4) {
+    if (argc != 6 && argc != 7 && argc != 5) {
         std::cerr << "Invalid number of arguments" << std::endl;
 		return false;
 	} 
@@ -40,6 +40,14 @@ bool Config::parse(int argc, char* argv[]) {
 		gridHeight = std::stoi(argv[5]);
 		gridSize = std::stod(argv[6]);
     }
+    else if (methodStr == "FIDUCIAL") {
+        method = FIDUCIAL;
+        if (argc != 5) {
+            std::cerr << "Invalid number of arguments" << std::endl;
+            return false;
+        }
+        markerSize = std::stod(argv[4]);
+    }
     else if (methodStr == "IMAGE") {
 		method = IMAGE;
         if (argc != 6) {
@@ -48,13 +56,6 @@ bool Config::parse(int argc, char* argv[]) {
 		}
 		imageFile = argv[4];
 		imageWidth = std::stod(argv[5]);
-    }
-    else if (methodStr == "FIDUCIAL") {
-        method = FIDUCIAL;
-        if (argc != 4) {
-            std::cerr << "Invalid number of arguments" << std::endl;
-            return false;
-        }
     }
     else if (methodStr == "IMPROVED") {
         method = IMPROVED;
@@ -93,11 +94,20 @@ void Config::printUsage(std::ostream& os) const {
     os << "    - grid width: number of inner corners across the grid" << std::endl;
     os << "    - grid height: number of inner corners down the grid" << std::endl;
     os << "    - grid size: size of the grid squares in centimetres" << std::endl;
+    os << "  - FIDUCIAL: <marker size>" << std::endl;
+    os << "    - marker size: size of markers in centimetres" << std::endl;
     os << "  - IMAGE: <image file> <image width>" << std::endl;
+    os << "    - image file: file containing the image to track" << std::endl;
+    os << "    - image width: width of the image in centimetres" << std::endl;
+    os << "  - ORB: <image file> <image width>" << std::endl;
+    os << "    - image file: file containing the image to track" << std::endl;
+    os << "    - image width: width of the image in centimetres" << std::endl;
+    os << "  - IMPROVED: <image file> <image width>" << std::endl;
     os << "    - image file: file containing the image to track" << std::endl;
     os << "    - image width: width of the image in centimetres" << std::endl;
     os << std::endl;
     os << "Examples:" << std::endl;
     os << "SimpleSLAM 0 calibration.txt CHECKERBOARD 14 7 2.0" << std::endl;
+    os << "SimpleSLAM 0 calibration.txt FIDUCIAL 20.0" << std::endl;
     os << "SimpleSLAM testFile.mp4 calibration.txt IMAGE image.jpg 10.0" << std::endl;
 }

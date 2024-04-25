@@ -11,6 +11,7 @@
 #include "Display.h"
 #include "ImagePoseEstimator.h"
 #include "Timer.h"
+#include "Util.h"
 
 
 int main(int argc, char* argv[]) {
@@ -56,7 +57,6 @@ int main(int argc, char* argv[]) {
 	}
 	Display display(camera, frame.size(), 3);
 
-
 	// Create a pose estimator object
 	PoseEstimator* poseEstimator = 0;
 	if (cfg.method == CHECKERBOARD) {
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
 		poseEstimator = new FiducialPoseEstimator(camera);
 	} 
 	else if (cfg.method == IMPROVED) {
-		poseEstimator = new ImprovedPoseEstimator(camera, cfg.imageFile, cfg.imageWidth, frame);
+		poseEstimator = new ImprovedPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
 	}
 	else if (cfg.method == ORB) {
 		poseEstimator = new ORBPoseEstimator(camera, cfg.imageFile, cfg.imageWidth);
@@ -81,22 +81,13 @@ int main(int argc, char* argv[]) {
 
 	// Main loop - read images, estimate pose, and update display.
 	Timer timer;
-	int trackedFrames = 0;
-	int totalFrames = 0;
-	//std::cout << "matches\ttime\terr" << std::endl;
 	while (cap.read(frame) && cv::waitKey(1) == noKey) {
 		timer.reset();
 		Pose pose = poseEstimator->estimatePose(frame);
 		double elapsed = timer.elapsed_ms();
-		std::cout << elapsed / 1000.0 << "\t" << std::round(pose.err*10000.0)/10000.0 << "\t" << std::endl;
-		totalFrames += 1;
-		if (pose.valid) {
-			trackedFrames += 1;
-		}
+		std::cout << elapsed / 1000.0 << "," << pose.err << std::endl;
 		display.show(frame, pose);
 	}
-
-	//std::cout << "Tracked " << trackedFrames << " out of " << totalFrames << " frames" << (double)trackedFrames / (double)totalFrames * 100 << "%" << std::endl;
 
 	return 0;
 }

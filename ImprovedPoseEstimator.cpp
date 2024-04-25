@@ -3,15 +3,11 @@
 #include "Util.h"
 #include <iostream>
 #include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/videoio.hpp>
-#include <opencv2/video.hpp>
 
-using namespace std;
 using namespace cv;
+using namespace std;
 
-ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageFile, double imageWidth, cv::Mat frame) :
+ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageFile, double imageWidth) :
 	PoseEstimator(camera), imageWidth(imageWidth) {
 
 	// Read the image
@@ -24,10 +20,9 @@ ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageF
 	}
 
 	// Detect keypoints and compute descriptors
-	cv::Mat descriptors;
+	Mat descriptors;
 	vector<KeyPoint> keypoints;
 	detector = SIFT::create();
-	detectorH = SIFT::create();
 	detector->detectAndCompute(image, noArray(), keypoints, descriptors);
 	
 	// Initialize the matcher with the descriptors
@@ -40,54 +35,7 @@ ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageF
 		objectPoints.push_back(Point3f(keypoint.pt.x, keypoint.pt.y, 0.0));
 	}
 
-	// Init separate H (homography) matcher
-	matcherH = DescriptorMatcher::create("FlannBased");
-	mask = Mat::zeros(frame.size(), frame.type());
-
-}
-
-Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
-	Pose pose;
-
-	// Detect keypoints and compute descriptors
-	vector<KeyPoint> keypoints;
-	Mat descriptors;
-
-	// If we have a previous frame, track the object using relative pose estimation
-	if (!prevFrame.empty() && prevPose.valid)
-	{
-		//pose = relativePoseEstimation(keypoints, descriptors);
-		pose = opticalFlowTracking(img);
-	}
-	else // Otherwise do absolute pose estimation
-	{
-		detector->detectAndCompute(img, noArray(), keypoints, descriptors);
-		prevFrameKeypoints = keypoints;
-		prevFrameDescriptors = descriptors;
-		pose = fullDetection(keypoints, descriptors);
-		if (pose.valid) {
-			cv::Mat grey;
-			cvtColor(img, grey, COLOR_BGR2GRAY);
-			vector<Point2f> goodFeatures;
-			goodFeaturesToTrack(grey, goodFeatures, 100, 0.3, 7, noArray(), 7, false, 0.04);
-			prevFrameImagePoints = goodFeatures;
-			prevFrame = img;
-		}
-	}
-	prevPose = pose;
-	return pose;
-}
-
-Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
-	Pose pose;
-	cv::Mat frame_gray;
-	cvtColor(img, frame_gray, COLOR_BGR2GRAY);
-
-	cv::Mat prev_grey;
-	cvtColor(prevFrame, prev_grey, COLOR_BGR2GRAY);
-
-	// Stuff for drawing images
-	vector<Scalar> colors;
+	// Generate random colours for the optical flow drawing
 	RNG rng;
 	for (int i = 0; i < 100; i++)
 	{
@@ -96,101 +44,101 @@ Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
 		int b = rng.uniform(0, 256);
 		colors.push_back(Scalar(r, g, b));
 	}
+}
+
+Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
+	Pose pose;
+
+	// If we have a valid pose, track the object using relative pose estimation
+	if (prevPose.valid)
+	{
+		pose = opticalFlowTracking(img);
+	}
+	else // Otherwise do absolute pose estimation
+	{
+		pose = getInitialPose(img);
+
+		// If we find a valid pose initialise the optical flow tracking
+		if (pose.valid) {
+			Mat frameGrey;
+			cvtColor(img, frameGrey, COLOR_BGR2GRAY);
+			goodFeaturesToTrack(frameGrey, trackingFeatures, 100, 0.3, 7, noArray(), 7, false, 0.04);
+			prevFrame = frameGrey;
+			mask = Mat::zeros(img.size(), img.type()); // mask for drawing optical flow
+		}
+	}
+	prevPose = pose;
+	return pose;
+}
+
+// adapted from https://github.com/opencv/opencv/blob/4.x/samples/cpp/tutorial_code/video/optical_flow/optical_flow.cpp
+Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
+	Pose pose;
+	pose.valid = false;
+
+	Mat frameGrey;
+	cvtColor(img, frameGrey, COLOR_BGR2GRAY);
 
 	// calculate optical flow
 	vector<uchar> status;
 	vector<float> err;
-	vector<Point2f> imagePoints;
+	vector<Point2f> imageFeatures;
 	TermCriteria criteria = TermCriteria((TermCriteria::COUNT)+(TermCriteria::EPS), 10, 0.03);
-	calcOpticalFlowPyrLK(prev_grey, frame_gray, prevFrameImagePoints, imagePoints, status, err, Size(15, 15), 2, criteria);
+	calcOpticalFlowPyrLK(prevFrame, frameGrey, trackingFeatures, imageFeatures, status, err, Size(15, 15), 2, criteria);
 
-	vector<Point2f> good_new;
-	vector<Point2f> good_old;
-	for (uint i = 0; i < prevFrameImagePoints.size(); i++)
+	// Select good points
+	vector<Point2f> goodPointsNew;
+	vector<Point2f> goodPointsOld;
+	for (uint i = 0; i < trackingFeatures.size(); i++)
 	{
-		// Select good points
 		if (status[i] == 1) {
-			good_new.push_back(imagePoints[i]);
-			good_old.push_back(prevFrameImagePoints[i]);
-			line(mask, imagePoints[i], prevFrameImagePoints[i], colors[i], 2);
-			circle(img, imagePoints[i], 5, colors[i], -1);
+			goodPointsNew.push_back(imageFeatures[i]);
+			goodPointsOld.push_back(trackingFeatures[i]);
+			line(mask, imageFeatures[i], trackingFeatures[i], colors[i], 2);
+			circle(img, imageFeatures[i], 5, colors[i], -1);
 		}
 	}
+	cout << goodPointsNew.size() << ",";
 
-	cv::Mat flowImg;
-	add(img, mask, flowImg);
-	imshow("flow", flowImg);
+	// Draw Visualisation
+	Mat result;
+	add(img, mask, result);
+	imshow("Optical Flow Visualisation", result);
 
-	prevFrameImagePoints = good_new;
-	prevFrame = img.clone();
+	// Update the tracking features and the previous frame
+	trackingFeatures = goodPointsNew;
+	prevFrame = frameGrey.clone();
 
-	std::cout << good_new.size() << "\t";
-
-	// estimate pose using homography chaining
-	if (good_new.size() > 50) 
+	// Estimate pose using homography chaining
+	if (goodPointsNew.size() > 50) 
 	{
-		Mat H = findHomography(good_old, good_new, RANSAC);
+		// calculate the homography and chain it with the previous homography
+		H = findHomography(goodPointsOld, goodPointsNew, RANSAC) * H;
 
-		// apply H to prevHomography matrix to get the new homography
-		Mat newHomography = H * prevHomography;
-		prevHomography = newHomography;
-
+		// project the 2D points of the reference frame to the current frame
 		vector<Point2f> projectedRefImagePoints;
-		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, newHomography);
+		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, H);
 
+		// solve the pose using the projected 2D points and the 3D points from the reference frame
 		pose = Util::solvePose(projectedRefImagePoints, refFrameObjectPoints, camera);
 	}
 
 	return pose;
 }
 
-Pose ImprovedPoseEstimator::relativePoseEstimation(vector<KeyPoint> keypoints, Mat descriptors) {
-	// Init pose
-	Pose pose;
-	pose.valid = false;
-
-	// Find feature matches between the previous frame and the current frame
-	vector<vector<DMatch>> matches;
-	//detector->detectAndCompute(img, noArray(), keypoints, descriptors);
-	matcherH->knnMatch(prevFrameDescriptors, descriptors, matches, 2);
-
-	// Filter the matches
-	const float thres = 0.7; 
-	vector<Point2f> goodpoints1, goodpoints2;
-	for (int i = 0; i < matches.size(); i++)
-	{
-		if (matches[i][0].distance < thres * matches[i][1].distance)
-		{
-			goodpoints1.push_back(prevFrameKeypoints[matches[i][0].queryIdx].pt);
-			goodpoints2.push_back(keypoints[matches[i][0].trainIdx].pt);
-		}
-	}
-
-	if (goodpoints1.size() > 8)
-	{
-		Mat H = findHomography(goodpoints1, goodpoints2, RANSAC);
-		
-		// apply H to prevHomography matrix to get the new homography
-		Mat newHomography = H * prevHomography;
-		prevHomography = newHomography;
-
-		vector<Point2f> projectedRefImagePoints;
-		perspectiveTransform(refFrameImagePoints, projectedRefImagePoints, newHomography);
-
-		pose = Util::solvePose(projectedRefImagePoints, refFrameObjectPoints, camera);
-	}
-
-	return pose;
-}
-
-Pose ImprovedPoseEstimator::fullDetection(vector<KeyPoint> keypoints, Mat descriptors) {
+Pose ImprovedPoseEstimator::getInitialPose(const Mat& img) {
 	//Init pose
 	Pose pose;
 	pose.valid = false;
 
-	// Match the descriptors
-	vector<std::vector<DMatch>> matches;
-	matcher->knnMatch(descriptors, matches, 2);
+	// Detect keypoints and compute descriptors
+	vector<KeyPoint> keypoints2;
+	Mat descriptors2;
+	detector->detectAndCompute(img, noArray(), keypoints2, descriptors2);
+
+	// Match the descriptors2 with the saved descriptors
+	vector<vector<DMatch>> matches;
+	matcher->knnMatch(descriptors2, matches, 2);
 
 	// Filter the matches
 	// Get the 2D and 3D points for the good matches
@@ -201,37 +149,23 @@ Pose ImprovedPoseEstimator::fullDetection(vector<KeyPoint> keypoints, Mat descri
 	{
 		if (matches[i][0].distance < threshold * matches[i][1].distance)
 		{
-			goodpoints2D.push_back(keypoints[matches[i][0].queryIdx].pt);
-			goodpoints3D.push_back(objectPoints[matches[i][0].trainIdx] * imageWidth / image.cols);
+			goodpoints2D.push_back(keypoints2[matches[i][0].queryIdx].pt);
+			goodpoints3D.push_back(objectPoints[matches[i][0].trainIdx] * imageWidth / image.cols); // Scale the 3D points with image width
 		}
 	}
-	std::cout << goodpoints2D.size() << "\t";
+	cout << goodpoints2D.size() << ",";
 
 	// Estimate the pose if we have at least 20 good matches
 	if (goodpoints2D.size() > 20) {
-		if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec))
+		pose = Util::solvePose(goodpoints2D, goodpoints3D, camera);
+
+		if (pose.valid)
 		{
-			double reprojectionError = Util::computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
-			if (reprojectionError < 10)
-			{
-				pose.valid = true;
-				refFrameObjectPoints = goodpoints3D;
-				refFrameImagePoints = goodpoints2D;
-				prevHomography = Mat::eye(3, 3, CV_64F);
-				//std::cout << "abs";
-				//pose.toString();
-			}
-			pose.err = reprojectionError;
+			refFrameObjectPoints = goodpoints3D;
+			refFrameImagePoints = goodpoints2D;
+			H = Mat::eye(3, 3, CV_64F);
 		}
 	}
-
-	//if (!pose.valid && prevPose.valid)
-	//{
-	//	// If we can't find the pose and we had a reasonable estimation in the previous frame, 
-	//	// try to track the object using the previous frame
-	//	pose = relativePoseEstimation(keypoints, descriptors);
-	//	std::cout << "r";
-	//}
 
 	return pose;
 }

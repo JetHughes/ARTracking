@@ -1,37 +1,44 @@
 #include "util.h"
 
-Util::Util() {}
+using namespace std;
+using namespace cv;
 
+Util::Util() {}
 Util::~Util() {}
 
-Pose Util::solvePose(vector<Point2f> goodpoints2D, vector<Point3f> goodpoints3D, Camera camera) {
+
+// Solve the pose of the camera using solvepnp ransac given the 2D and 3D points
+Pose Util::solvePose(const vector<Point2f>& goodpoints2D, const vector<Point3f>& goodpoints3D, const Camera& camera, double maxErr) {
     Pose pose;
     pose.valid = false;
 
     if (solvePnPRansac(goodpoints3D, goodpoints2D, camera.K, camera.d, pose.rvec, pose.tvec)) {
-        double reprojectionError = computeReprojectionError(goodpoints3D, goodpoints2D, pose.rvec, pose.tvec, camera.K, camera.d);
-        if (reprojectionError < 10) {
+        pose.err = computeReprojectionError(goodpoints3D, goodpoints2D, pose, camera);
+        if (pose.err < maxErr) {
             pose.valid = true;
         }
-        pose.err = reprojectionError;
     }
 
     return pose;
 }
 
-double Util::computeReprojectionError(const std::vector<cv::Point3f>& objectPoints, const std::vector<cv::Point2f>& imagePoints, const cv::Mat& rvec, const cv::Mat& tvec, const cv::Mat& cameraMatrix, const cv::InputArray distortionCoeffs) {
+double Util::computeReprojectionError(const std::vector<cv::Point3f>& objectPoints, const std::vector<cv::Point2f>& imagePoints, const Pose& pose, const Camera& camera) {
 	std::vector<cv::Point2f> projectedPoints;
-	projectPoints(objectPoints, rvec, tvec, cameraMatrix, distortionCoeffs, projectedPoints);
+	projectPoints(objectPoints, pose.rvec, pose.tvec, camera.K, camera.d, projectedPoints);
 
-	double totalError = 0.0;
+	double sumError = 0.0;
 	for (size_t i = 0; i < imagePoints.size(); ++i)
 	{
-		double dx = projectedPoints[i].x - imagePoints[i].x;
-		double dy = projectedPoints[i].y - imagePoints[i].y;
-		double error = sqrt(dx * dx + dy * dy);
-		totalError += error;
+		double error = cv::norm(imagePoints[i] - projectedPoints[i]);
+		sumError += error;
 	}
 
-	double meanError = totalError / imagePoints.size();
+	double meanError = sumError / imagePoints.size();
 	return meanError;
+}
+
+// from https://www.geeksforgeeks.org/rounding-floating-point-number-two-decimal-places-c-c/
+float Util::round2dp(float num) {
+	float value = (int)(num * 100 + .5);
+	return (float)value / 100;
 }

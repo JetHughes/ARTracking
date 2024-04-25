@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD 14)
 # set(CMAKE_TOOLCHAIN_FILE "K:\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake")
 project( ARTracking )
 
-
 find_package(OpenCV REQUIRED)#find_package (OpenCV CONFIG REQUIRED)
 include_directories (${OpenCV_INCLUDE_DIRS})
 add_executable( ARTracking 
@@ -31,17 +30,10 @@ add_executable( ARTracking
    ImprovedPoseEstimator.cpp
    ImprovedPoseEstimator.h
    ORBPoseEstimator.cpp
-   ORBPoseEstimator.h "Util.cpp" "Util.h")
-
+   ORBPoseEstimator.h 
+   Util.cpp
+   Util.h)
 
 target_link_libraries(ARTracking
-  ${OpenCV_LIBS}
-)
-
-add_executable( OpticalFlow
-    optical_flow.cpp
-)
-
-target_link_libraries(OpticalFlow
   ${OpenCV_LIBS}
 )

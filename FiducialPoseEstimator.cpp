@@ -35,7 +35,7 @@ Pose FiducialPoseEstimator::estimatePose(const Mat& img) {
 	std::vector<std::vector<cv::Point2f>> corners, rejectedCandidates;
 	detector.detectMarkers(img, corners, foundMarkerIds, rejectedCandidates);
 	detector.refineDetectedMarkers(img, board, corners, foundMarkerIds, rejectedCandidates);
-	std::cout << foundMarkerIds.size() << "\t";
+	std::cout << foundMarkerIds.size() << ",";
 
 	// If at least one marker detected
 	if (foundMarkerIds.size() > 0) {
@@ -57,8 +57,6 @@ Pose FiducialPoseEstimator::estimatePose(const Mat& img) {
 			cv::aruco::drawDetectedMarkers(img, corners, foundMarkerIds);
 			cv::drawFrameAxes(img, camera.K, camera.d, rvecs[i], tvecs[i], 1);
 		}
-		//cv::imshow("markers", img);
-		//cv::waitKey(0);
 		
 		// Get object and image points for the solvePnP function
 		std::vector<cv::Point3f> outObjPoints;
