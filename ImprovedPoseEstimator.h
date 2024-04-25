@@ -20,7 +20,7 @@ private:
 	double imageWidth;
 
 	// For absolute pose estimation
-	cv::Ptr<cv::SIFT> detector;
+	cv::Ptr<cv::FeatureDetector> detector;
 	cv::Ptr<cv::DescriptorMatcher> matcher;
 	std::vector<cv::Point3f> objectPoints;
 

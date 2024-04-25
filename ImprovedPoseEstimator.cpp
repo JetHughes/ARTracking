@@ -22,11 +22,11 @@ ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageF
 	// Detect keypoints and compute descriptors
 	Mat descriptors;
 	vector<KeyPoint> keypoints;
-	detector = SIFT::create();
+	detector = ORB::create();
 	detector->detectAndCompute(image, noArray(), keypoints, descriptors);
 	
 	// Initialize the matcher with the descriptors
-	matcher = DescriptorMatcher::create("FlannBased");
+	matcher = DescriptorMatcher::create("BruteForce-Hamming");
 	matcher->add(descriptors);
 
 	// Create the 3D points for the object
@@ -48,6 +48,7 @@ ImprovedPoseEstimator::ImprovedPoseEstimator(const Camera& camera, string imageF
 
 Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 	Pose pose;
+	pose.valid = false;
 
 	// If we have a valid pose, track the object using relative pose estimation
 	if (prevPose.valid)
@@ -73,11 +74,11 @@ Pose ImprovedPoseEstimator::estimatePose(const Mat& img) {
 
 // adapted from https://github.com/opencv/opencv/blob/4.x/samples/cpp/tutorial_code/video/optical_flow/optical_flow.cpp
 Pose ImprovedPoseEstimator::opticalFlowTracking(const Mat& img) {
-	Pose pose;
-	pose.valid = false;
-
 	Mat frameGrey;
 	cvtColor(img, frameGrey, COLOR_BGR2GRAY);
+
+	Pose pose;
+	pose.valid = false;
 
 	// calculate optical flow
 	vector<uchar> status;
@@ -137,23 +138,22 @@ Pose ImprovedPoseEstimator::getInitialPose(const Mat& img) {
 	detector->detectAndCompute(img, noArray(), keypoints2, descriptors2);
 
 	// Match the descriptors2 with the saved descriptors
-	vector<vector<DMatch>> matches;
-	matcher->knnMatch(descriptors2, matches, 2);
+	vector<DMatch> matches;
+	matcher->match(descriptors2, matches);
 
 	// Filter the matches
 	// Get the 2D and 3D points for the good matches
-	double threshold = 0.7;
 	vector<Point2f> goodpoints2D;
 	vector<Point3f> goodpoints3D;
+	std::sort(matches.begin(), matches.end());
+	const int numGoodMatches = matches.size() * 0.1;
+	matches.erase(matches.begin() + numGoodMatches, matches.end());
 	for (int i = 0; i < matches.size(); i++)
 	{
-		if (matches[i][0].distance < threshold * matches[i][1].distance)
-		{
-			goodpoints2D.push_back(keypoints2[matches[i][0].queryIdx].pt);
-			goodpoints3D.push_back(objectPoints[matches[i][0].trainIdx] * imageWidth / image.cols); // Scale the 3D points with image width
-		}
+		goodpoints2D.push_back(keypoints2[matches[i].queryIdx].pt);
+		goodpoints3D.push_back(objectPoints[matches[i].trainIdx] * imageWidth / image.cols);
 	}
-	cout << goodpoints2D.size() << ",";
+	std::cout << goodpoints2D.size() << ",";
 
 	// Estimate the pose if we have at least 20 good matches
 	if (goodpoints2D.size() > 20) {
